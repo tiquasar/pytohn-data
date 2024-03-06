@@ -73,3 +73,74 @@ for epoch in range(epochs):
 
 # Save the model (Optional)
 torch.save(model.state_dict(), 'text_predictor_model.pth')
+
+
+
+
+
+
+import pandas as pd
+from ctgan import CTGANSynthesizer
+
+def load_data_chunk(file_path, chunksize, skiprows):
+    """Load a chunk of data from a CSV file."""
+    chunk = pd.read_csv(file_path, chunksize=chunksize, skiprows=skiprows)
+    return next(chunk)
+
+def save_model_state(ctgan, filepath):
+    """Save the CTGAN model state."""
+    ctgan.save(filepath)
+
+def load_model_state(filepath):
+    """Load a CTGAN model state from a file."""
+    ctgan = CTGANSynthesizer()
+    ctgan = ctgan.load(filepath)
+    return ctgan
+
+def incremental_training_with_state_save(file_path, chunksize, model_path, epochs=1):
+    """Train a CTGAN model incrementally on data chunks and save/reuse model state."""
+    for epoch in range(epochs):
+        print(f"Epoch {epoch+1}/{epochs}")
+        
+        total_rows = sum(1 for _ in open(file_path)) - 1  # Exclude header
+        total_chunks = (total_rows // chunksize) + (0 if total_rows % chunksize == 0 else 1)
+        
+        for chunk_idx in range(total_chunks):
+            print(f"Training on chunk {chunk_idx+1}/{total_chunks}")
+            
+            if chunk_idx == 0 and epoch == 0:
+                # Initialize a new model for the very first chunk and first epoch
+                ctgan = CTGANSynthesizer(epochs=1)
+            else:
+                # Load the model from the previous state for subsequent chunks/epochs
+                ctgan = load_model_state(model_path)
+            
+            skiprows = 1 + chunk_idx * chunksize
+            chunk = load_data_chunk(file_path, chunksize, range(1, skiprows))
+            
+            # Preprocess your chunk as necessary here
+            
+            # Train the model on the current chunk
+            ctgan.fit(chunk)
+            
+            # Save the model state after training on the chunk
+            save_model_state(ctgan, model_path)
+            
+            print(f"Finished training on chunk {chunk_idx+1}/{total_chunks}")
+    
+    print("Finished training on all chunks.")
+    # Optionally return or load the final model state
+    final_model = load_model_state(model_path)
+    return final_model
+
+# Parameters
+file_path = 'your_data.csv'  # Your CSV file path
+chunksize = 10000  # Adjust based on your memory capacity
+model_path = 'ctgan_model.pkl'  # Path to save/load the model state
+epochs = 5  # Number of times to iterate through all chunks
+
+# Train the model incrementally and save/reuse the model state
+final_model = incremental_training_with_state_save(file_path, chunksize, model_path, epochs)
+
+# After training, you can use final_model to generate synthetic data
+
