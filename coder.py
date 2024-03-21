@@ -1,6 +1,5 @@
 import pandas as pd
 from ctgan import CTGANSynthesizer
-from sdv.tabular import TVAE
 import torch
 from torch import nn
 
@@ -14,14 +13,10 @@ num_samples = len(data)
 ctgan = CTGANSynthesizer(epochs=5)  # Use more epochs for better training
 ctgan.fit(data)
 
-# Initialize and train TVAE from SDV
-tvae = TVAE(epochs=5)  # Use more epochs for better training
-tvae.fit(data)
-
-# Define the TVAE model in PyTorch
-class PyTorchTVAE(nn.Module):
+# Define the VAE model in PyTorch
+class VAE(nn.Module):
     def __init__(self, input_dim, latent_dim):
-        super(PyTorchTVAE, self).__init__()
+        super(VAE, self).__init__()
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, 128),
             nn.ReLU(),
@@ -58,35 +53,36 @@ class PyTorchTVAE(nn.Module):
         return recon_loss + kl_loss
 
 # Prepare data for PyTorch model
-input_dim = data.shape[1]
+# Assume numerical conversion or encoding has been done prior
+input_dim = data.shape[1]  # Number of features in the data
 latent_dim = 10  # Size of the latent space
-pytorch_tvae = PyTorchTVAE(input_dim, latent_dim)
-optimizer = torch.optim.Adam(pytorch_tvae.parameters(), lr=1e-3)
+vae = VAE(input_dim, latent_dim)
+optimizer = torch.optim.Adam(vae.parameters(), lr=1e-3)
 
-data_tensor = torch.tensor(data.values, dtype=torch.float32)
+# Convert data to tensor
+data_tensor = torch.tensor(data.values, dtype=torch.float32) if not data.empty else torch.Tensor()
 
-# Training loop for our PyTorch TVAE
+# Training loop for our PyTorch VAE
 epochs = 5  # Use more epochs for better training
 for epoch in range(epochs):
-    pytorch_tvae.train()
+    vae.train()
     optimizer.zero_grad()
-    reconstructed, mean, logvar = pytorch_tvae(data_tensor)
-    loss = pytorch_tvae.loss_function(reconstructed, data_tensor, mean, logvar)
+    reconstructed, mean, logvar = vae(data_tensor)
+    loss = vae.loss_function(reconstructed, data_tensor, mean, logvar)
     loss.backward()
     optimizer.step()
     print(f"Epoch {epoch+1}, Loss: {loss.item()}")
 
-# Generate synthetic data
+# Generate synthetic data using CTGAN
 ctgan_data = ctgan.sample(num_samples)
-tvae_data = tvae.sample(num_samples)
 
-# Generate data from PyTorch TVAE
-pytorch_tvae.eval()
+# Generate synthetic data using the trained VAE
+vae.eval()
 with torch.no_grad():
     z_sample = torch.randn(num_samples, latent_dim)
-    vae_data = pytorch_tvae.decode(z_sample).numpy()
+    vae_data = vae.decode(z_sample).numpy()
 
-# Combine the synthetic data
-synthetic_data = pd.concat([ctgan_data, pd.DataFrame(tvae_data), pd.DataFrame(vae_data)])
+# Combine the synthetic data from CTGAN and VAE
+synthetic_data = pd.concat([ctgan_data, pd.DataFrame(vae_data)])
 
-# You can now use synthetic_data for your further analysis or modeling
+# The synthetic_data DataFrame now contains the combined synthetic data
