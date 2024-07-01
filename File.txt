@@ -1,1 +1,16 @@
 
+import requests
+
+# Path to your exported certificate
+cert_path = 'path_to_your_certificate.pem'  # Adjust the file name and path as necessary
+
+url = 'https://your-url.com'
+
+# Make a request using the specified certificate for SSL verification
+try:
+    response = requests.get(url, verify=cert_path)
+    print(response.text)
+except requests.exceptions.SSLError as e:
+    print("SSL Error:", e)
+except requests.exceptions.RequestException as e:
+    print("Request Failed:", e)
